@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Traffic Control System</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #020b18;
+    --panel: #051428;
+    --border: #0a2a4a;
+    --accent: #00d4ff;
+    --accent2: #00ff88;
+    --red: #ff3b5c;
+    --amber: #ffb800;
+    --green: #00ff88;
+    --text: #c8e6f5;
+    --dim: #4a7a9b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; padding: 16px; max-width: 1400px; margin: 0 auto; }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #051428, #071e38);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    box-shadow: 0 0 30px rgba(0,212,255,0.08);
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-shadow: 0 0 20px rgba(0,212,255,0.5);
+  }
+  .logo span { color: var(--accent2); }
+  .status-bar { display: flex; gap: 20px; align-items: center; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .status-text { font-size: 0.85rem; color: var(--accent2); letter-spacing: 1px; }
+  .time-display { font-family: 'Orbitron', monospace; font-size: 1rem; color: var(--accent); }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-label { font-size: 0.75rem; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-value { font-family: 'Orbitron', monospace; font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-sub { font-size: 0.75rem; color: var(--dim); margin-top: 4px; }
+
+  /* Main grid */
+  .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .full-width { grid-column: 1 / -1; }
+
+  /* Panel */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,212,255,0.03);
+  }
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .panel-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent);
+  }
+  .panel-body { padding: 16px; }
+
+  /* Junctions */
+  .junction-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .junction-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+  .junction-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .junction-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .junction-name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+  .signal-light {
+    width: 14px; height: 14px; border-radius: 50%;
+    box-shadow: 0 0 10px currentColor;
+    flex-shrink: 0;
+  }
+  .signal-red { background: var(--red); color: var(--red); }
+  .signal-green { background: var(--green); color: var(--green); }
+  .signal-amber { background: var(--amber); color: var(--amber); }
+  .junction-stats { display: flex; gap: 12px; }
+  .j-stat { font-size: 0.75rem; color: var(--dim); }
+  .j-stat span { color: var(--text); font-weight: 600; }
+
+  /* Emergency */
+  .emergency-section { padding: 16px; }
+  .emergency-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    border: 2px solid var(--red);
+    background: rgba(255,59,92,0.1);
+    color: var(--red);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 10px;
+  }
+  .emergency-btn:hover { background: rgba(255,59,92,0.25); box-shadow: 0 0 20px rgba(255,59,92,0.3); }
+  .emergency-btn.active { background: var(--red); color: white; box-shadow: 0 0 30px rgba(255,59,92,0.5); animation: emergencyPulse 1s infinite; }
+  @keyframes emergencyPulse { 0%,100%{box-shadow:0 0 30px rgba(255,59,92,0.5);} 50%{box-shadow:0 0 50px rgba(255,59,92,0.9);} }
+  .deactivate-btn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--dim);
+    background: transparent;
+    color: var(--dim);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: none;
+  }
+  .deactivate-btn:hover { border-color: var(--text); color: var(--text); }
+  .emergency-status {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    text-align: center;
+    background: rgba(0,255,136,0.05);
+    border: 1px solid rgba(0,255,136,0.2);
+    color: var(--green);
+    display: none;
+  }
+
+  /* Vehicle type selector */
+  .vehicle-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .v-type {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--dim);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .v-type.selected, .v-type:hover { border-color: var(--red); color: var(--red); background: rgba(255,59,92,0.08); }
+  .v-type .icon { font-size: 1.2rem; display: block; margin-bottom: 2px; }
+
+  /* Incident form */
+  .incident-form { display: flex; flex-direction: column; gap: 10px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  select, input {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.9rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  select option { background: var(--panel); }
+  .submit-btn {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(0,212,255,0.1);
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .submit-btn:hover { background: rgba(0,212,255,0.2); box-shadow: 0 0 15px rgba(0,212,255,0.2); }
+
+  /* AI Forecast */
+  .forecast-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .forecast-item {
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 80px;
+    transition: border-color 0.2s;
+  }
+  .forecast-item:hover { border-color: var(--accent); }
+  .f-hour { font-family: 'Orbitron', monospace; font-size: 0.75rem; color: var(--dim); margin-bottom: 6px; }
+  .f-bar { height: 40px; border-radius: 4px; margin: 6px auto; width: 30px; transition: height 0.5s; }
+  .f-label { font-size: 0.7rem; font-weight: 600; }
+
+  /* Analytics chart */
+  .chart-container { height: 120px; display: flex; align-items: flex-end; gap: 6px; padding: 0 4px; }
+  .chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .chart-bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, var(--accent), rgba(0,212,255,0.3));
+    transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
+    min-height: 4px;
+  }
+  .chart-label { font-size: 0.65rem; color: var(--dim); }
+
+  /* Live feed */
+  .live-feed { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .live-feed::-webkit-scrollbar { width: 4px; }
+  .live-feed::-webkit-scrollbar-track { background: transparent; }
+  .live-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .feed-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+    font-size: 0.8rem;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-10px);} to{opacity:1;transform:translateX(0);} }
+  .feed-time { color: var(--dim); font-size: 0.7rem; flex-shrink: 0; font-family: 'Orbitron', monospace; }
+  .feed-item.alert { border-left-color: var(--red); }
+  .feed-item.warning { border-left-color: var(--amber); }
+  .feed-item.success { border-left-color: var(--green); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 0.85rem;
+    z-index: 1000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s;
+    font-family: 'Rajdhani', sans-serif;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+
+  /* Connection indicator */
+  .ws-status { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; }
+  .ws-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+  .ws-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+
+  /* Route suggestion */
+  .route-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .route-card {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+  }
+  .route-card.suggested { border-color: var(--green); background: rgba(0,255,136,0.05); }
+  .route-card.current { border-color: var(--red); background: rgba(255,59,92,0.05); }
+  .route-tag { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+  .route-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+  .route-meta { display: flex; gap: 10px; font-size: 0.75rem; color: var(--dim); }
+
+  @media (max-width: 768px) {
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+    .junction-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">SMART<span>TRAFFIC</span> <span style="font-size:0.7rem;color:var(--dim)">v2.0</span></div>
+    <div class="status-bar">
+      <div class="ws-status">
+        <div class="ws-dot" id="wsDot"></div>
+        <span id="wsText">Connecting...</span>
+      </div>
+      <div style="width:1px;height:16px;background:var(--border)"></div>
+      <div class="status-dot"></div>
+      <div class="status-text">SYSTEM ONLINE</div>
+      <div style="width:1px;height:16px;background:var(--border)"></div>
+      <div class="time-display" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Vehicles</div>
+      <div class="stat-value" id="totalVehicles">--</div>
+      <div class="stat-sub">Across all junctions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Wait Time</div>
+      <div class="stat-value amber" id="avgWait">--</div>
+      <div class="stat-sub">Seconds</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Red Signals</div>
+      <div class="stat-value red" id="redSignals">--</div>
+      <div class="stat-sub">Active stops</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Incidents</div>
+      <div class="stat-value" id="totalIncidents">0</div>
+      <div class="stat-sub">Reported today</div>
+    </div>
+  </div>
+
+  <!-- Main Grid Row 1 -->
+  <div class="main-grid">
+
+    <!-- Junctions -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">⬡ Live Junctions</div>
+        <div class="panel-badge" id="junctionCount">4 Active</div>
+      </div>
+      <div class="panel-body">
+        <div class="junction-grid" id="junctionGrid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergency + Route -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🚨 Emergency Control</div>
+        </div>
+        <div class="emergency-section">
+          <div class="vehicle-types">
+            <button class="v-type selected" onclick="selectVehicle(this,'Ambulance')"><span class="icon">🚑</span>Ambulance</button>
+            <button class="v-type" onclick="selectVehicle(this,'Fire Truck')"><span class="icon">🚒</span>Fire Truck</button>
+            <button class="v-type" onclick="selectVehicle(this,'Police')"><span class="icon">🚓</span>Police</button>
+          </div>
+          <button class="emergency-btn" id="emergencyBtn" onclick="activateEmergency()">
+            ⚡ ACTIVATE EMERGENCY CORRIDOR
+          </button>
+          <button class="deactivate-btn" id="deactivateBtn" onclick="deactivateEmergency()">
+            Deactivate Emergency
+          </button>
+          <div class="emergency-status" id="emergencyStatus"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🗺 Route Suggestion</div>
+        </div>
+        <div class="panel-body">
+          <div class="route-cards" id="routeCards">
+            <div class="route-card current">
+              <div class="route-tag" style="color:var(--red)">Current Route</div>
+              <div class="route-name">Loading...</div>
+            </div>
+            <div class="route-card suggested">
+              <div class="route-tag" style="color:var(--green)">Suggested Route</div>
+              <div class="route-name">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Main Grid Row 2 -->
+  <div class="main-grid">
+
+    <!-- AI Forecast -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🤖 AI Traffic Forecast</div>
+        <div class="panel-badge">XGBoost Model</div>
+      </div>
+      <div class="panel-body">
+        <div class="forecast-row" id="forecastRow">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Chart -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📊 Hourly Congestion</div>
+      </div>
+      <div class="panel-body">
+        <div class="chart-container" id="analyticsChart"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Main Grid Row 3 -->
+  <div class="main-grid">
+
+    <!-- Incident Report -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">⚠ Report Incident</div>
+      </div>
+      <div class="panel-body">
+        <div class="incident-form">
+          <div class="form-row">
+            <select id="incidentType">
+              <option value="">Incident Type</option>
+              <option>Accident</option>
+              <option>Road Block</option>
+              <option>Flooding</option>
+              <option>Construction</option>
+              <option>Breakdown</option>
+            </select>
+            <select id="incidentLocation">
+              <option value="">Select Junction</option>
+              <option>Junction A – Main Street</option>
+              <option>Junction B – Park Road</option>
+              <option>Junction C – Market Square</option>
+              <option>Junction D – College Road</option>
+            </select>
+          </div>
+          <button class="submit-btn" onclick="reportIncident()">SUBMIT INCIDENT REPORT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Feed -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">📡 Live Activity Feed</div>
+        <div class="panel-badge" id="feedCount">0 Events</div>
+      </div>
+      <div class="panel-body">
+        <div class="live-feed" id="liveFeed"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let selectedVehicle = 'Ambulance';
+let feedEvents = 0;
+let ws = null;
+
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Toast
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// Feed
+function addFeed(msg, type='') {
+  const feed = document.getElementById('liveFeed');
+  const now = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  const item = document.createElement('div');
+  item.className = `feed-item ${type}`;
+  item.innerHTML = `<span class="feed-time">${now}</span><span>${msg}</span>`;
+  feed.insertBefore(item, feed.firstChild);
+  if (feed.children.length > 20) feed.removeChild(feed.lastChild);
+  feedEvents++;
+  document.getElementById('feedCount').textContent = `${feedEvents} Events`;
+}
+
+// Vehicle type
+function selectVehicle(el, type) {
+  document.querySelectorAll('.v-type').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedVehicle = type;
+}
+
+// Render junctions
+function renderJunctions(junctions) {
+  const grid = document.getElementById('junctionGrid');
+  grid.innerHTML = junctions.map(j => `
+    <div class="junction-card" onclick="getAIPrediction(${j.id})">
+      <div class="junction-top">
+        <div class="junction-name">${j.name}</div>
+        <div class="signal-light signal-${j.status}"></div>
+      </div>
+      <div class="junction-stats">
+        <div class="j-stat">🚗 <span>${j.vehicles}</span></div>
+        <div class="j-stat">⏱ <span>${j.wait_time}s</span></div>
+        <div class="j-stat" style="text-transform:uppercase;font-size:0.7rem;color:var(--${j.status === 'red' ? 'red' : j.status === 'green' ? 'green' : 'amber'})">${j.status}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Fetch summary
+async function fetchSummary() {
+  try {
+    const res = await fetch(`${API}/traffic/summary`);
+    const data = await res.json();
+    document.getElementById('totalVehicles').textContent = data.total_vehicles;
+    document.getElementById('avgWait').textContent = data.avg_wait_time;
+    document.getElementById('redSignals').textContent = data.red_signals;
+    document.getElementById('totalIncidents').textContent = data.incidents;
+  } catch(e) {}
+}
+
+// Fetch junctions
+async function fetchJunctions() {
+  try {
+    const res = await fetch(`${API}/junctions`);
+    const data = await res.json();
+    renderJunctions(data.junctions);
+  } catch(e) {}
+}
+
+// AI Prediction on click
+async function getAIPrediction(id) {
+  try {
+    const res = await fetch(`${API}/ai/predict/${id}`);
+    const data = await res.json();
+    if (data.congestion_label) {
+      showToast(`Junction ${id}: ${data.congestion_label} congestion | Wait: ${data.predicted_wait_seconds}s | Confidence: ${data.confidence}%`, 'info');
+      addFeed(`AI Prediction — Junction ${id}: ${data.congestion_label} congestion (${data.confidence}% confidence)`);
+    }
+  } catch(e) { showToast('AI prediction failed', 'error'); }
+}
+
+// Forecast
+async function fetchForecast() {
+  try {
+    const res = await fetch(`${API}/ai/forecast`);
+    const data = await res.json();
+    const row = document.getElementById('forecastRow');
+    const colors = { High: 'var(--red)', Medium: 'var(--amber)', Low: 'var(--green)' };
+    const heights = { High: '36px', Medium: '24px', Low: '14px' };
+    row.innerHTML = data.forecast.map(f => `
+      <div class="forecast-item">
+        <div class="f-hour">${f.hour}</div>
+        <div class="f-bar" style="background:${colors[f.congestion_label]};height:${heights[f.congestion_label]};box-shadow:0 0 8px ${colors[f.congestion_label]}"></div>
+        <div class="f-label" style="color:${colors[f.congestion_label]}">${f.congestion_label}</div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+// Analytics
+async function fetchAnalytics() {
+  try {
+    const res = await fetch(`${API}/analytics/summary`);
+    const data = await res.json();
+    const chart = document.getElementById('analyticsChart');
+    const max = Math.max(...data.hourly_data.map(h => h.value));
+    chart.innerHTML = data.hourly_data.map(h => `
+      <div class="chart-bar-wrap">
+        <div class="chart-bar" style="height:${(h.value/max)*100}px"></div>
+        <div class="chart-label">${h.hour}</div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+// Route suggestion
+async function fetchRoute() {
+  try {
+    const res = await fetch(`${API}/route/suggest`);
+    const data = await res.json();
+    document.getElementById('routeCards').innerHTML = `
+      <div class="route-card current">
+        <div class="route-tag" style="color:var(--red)">⚠ Current Route</div>
+        <div class="route-name">${data.current_route.name}</div>
+        <div class="route-meta">
+          <span>🕐 ${data.current_route.time_minutes} min</span>
+          <span>📍 ${data.current_route.distance_km} km</span>
+        </div>
+      </div>
+      <div class="route-card suggested">
+        <div class="route-tag" style="color:var(--green)">✅ Suggested Route</div>
+        <div class="route-name">${data.suggested_route.name}</div>
+        <div class="route-meta">
+          <span>🕐 ${data.suggested_route.time_minutes} min</span>
+          <span>⚡ Save ${data.time_saved_minutes} min</span>
+        </div>
+      </div>
+    `;
+  } catch(e) {}
+}
+
+// Emergency
+async function activateEmergency() {
+  try {
+    const res = await fetch(`${API}/emergency/activate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({vehicle_type: selectedVehicle})
+    });
+    const data = await res.json();
+    document.getElementById('emergencyBtn').classList.add('active');
+    document.getElementById('emergencyBtn').textContent = `🚨 ${selectedVehicle.toUpperCase()} CORRIDOR ACTIVE`;
+    document.getElementById('deactivateBtn').style.display = 'block';
+    document.getElementById('emergencyStatus').style.display = 'block';
+    document.getElementById('emergencyStatus').textContent = `✓ All signals cleared for ${selectedVehicle}`;
+    showToast(`Emergency activated for ${selectedVehicle}!`, 'error');
+    addFeed(`🚨 Emergency activated — ${selectedVehicle} corridor cleared!`, 'alert');
+    fetchJunctions();
+  } catch(e) { showToast('Emergency activation failed', 'error'); }
+}
+
+async function deactivateEmergency() {
+  try {
+    await fetch(`${API}/emergency/deactivate`, {method:'POST'});
+    document.getElementById('emergencyBtn').classList.remove('active');
+    document.getElementById('emergencyBtn').textContent = '⚡ ACTIVATE EMERGENCY CORRIDOR';
+    document.getElementById('deactivateBtn').style.display = 'none';
+    document.getElementById('emergencyStatus').style.display = 'none';
+    showToast('Emergency deactivated. Signals returning to normal.', 'success');
+    addFeed('✓ Emergency deactivated — signals returning to normal', 'success');
+    fetchJunctions();
+  } catch(e) {}
+}
+
+// Incident report
+async function reportIncident() {
+  const type = document.getElementById('incidentType').value;
+  const location = document.getElementById('incidentLocation').value;
+  if (!type || !location) { showToast('Please select type and location', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/incidents/report`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({type, location})
+    });
+    const data = await res.json();
+    showToast(`Incident reported at ${location}!`, 'success');
+    addFeed(`⚠ Incident reported — ${type} at ${location}`, 'warning');
+    fetchSummary();
+  } catch(e) { showToast('Failed to report incident', 'error'); }
+}
+
+// WebSocket
+function connectWebSocket() {
+  try {
+    ws = new WebSocket('ws://localhost:8000/ws/live');
+    ws.onopen = () => {
+      document.getElementById('wsDot').classList.add('connected');
+      document.getElementById('wsText').textContent = 'Live Feed Active';
+      addFeed('✓ WebSocket connected — live updates active', 'success');
+    };
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'junction_update') {
+        renderJunctions(data.junctions);
+        const total = data.junctions.reduce((s,j) => s+j.vehicles, 0);
+        const avgW = Math.round(data.junctions.reduce((s,j) => s+j.wait_time, 0) / data.junctions.length);
+        document.getElementById('totalVehicles').textContent = total;
+        document.getElementById('avgWait').textContent = avgW;
+        document.getElementById('redSignals').textContent = data.junctions.filter(j=>j.status==='red').length;
+      }
+    };
+    ws.onclose = () => {
+      document.getElementById('wsDot').classList.remove('connected');
+      document.getElementById('wsText').textContent = 'Reconnecting...';
+      setTimeout(connectWebSocket, 3000);
+    };
+    ws.onerror = () => {
+      document.getElementById('wsText').textContent = 'Connection Error';
+    };
+  } catch(e) {}
+}
+
+// Init
+async function init() {
+  await fetchSummary();
+  await fetchJunctions();
+  await fetchForecast();
+  await fetchAnalytics();
+  await fetchRoute();
+  connectWebSocket();
+  addFeed('🚦 Smart Traffic Dashboard initialized');
+  setInterval(fetchSummary, 10000);
+  setInterval(fetchForecast, 30000);
+}
+
+init();
+</script>
+</body>
+</html>

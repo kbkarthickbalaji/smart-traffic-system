@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Traffic — Coimbatore</title>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #1a1a2e;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Full screen map */
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Top search bar — Google Maps style */
+.top-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border-radius: 24px;
+  padding: 10px 20px;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+  min-width: 380px;
+}
+
+.search-logo {
+  font-family: 'Google Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1a73e8;
+  white-space: nowrap;
+}
+
+.search-divider { width: 1px; height: 20px; background: #e0e0e0; }
+
+.search-text {
+  font-size: 0.9rem;
+  color: #3c4043;
+  flex: 1;
+  font-weight: 400;
+}
+
+.search-icon { color: #1a73e8; font-size: 1.1rem; }
+
+.top-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  background: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #3c4043;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: 'Roboto', sans-serif;
+}
+
+.chip:hover { background: #f1f3f4; box-shadow: 0 2px 15px rgba(0,0,0,0.3); }
+.chip.active { background: #e8f0fe; color: #1a73e8; }
+.chip.emergency { background: #fce8e6; color: #d93025; }
+.chip.emergency.on { background: #d93025; color: white; animation: emergencyPulse 1s infinite; }
+@keyframes emergencyPulse { 0%,100%{box-shadow:0 0 10px rgba(217,48,37,0.5);} 50%{box-shadow:0 0 25px rgba(217,48,37,0.8);} }
+
+/* Left sidebar — Google Maps style */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 380px;
+  background: white;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 20px rgba(0,0,0,0.15);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+
+.sidebar.open { transform: translateX(0); }
+
+.sidebar-header {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-family: 'Google Sans', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #202124;
+  margin-bottom: 4px;
+}
+
+.sidebar-sub { font-size: 0.8rem; color: #70757a; }
+
+.sidebar-body { flex: 1; overflow-y: auto; }
+.sidebar-body::-webkit-scrollbar { width: 4px; }
+.sidebar-body::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 2px; }
+
+/* Stats strip */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 1px;
+  background: #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.stat-item {
+  background: white;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.stat-val {
+  font-family: 'Google Sans', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #202124;
+}
+
+.stat-val.red { color: #d93025; }
+.stat-val.amber { color: #f9ab00; }
+.stat-val.blue { color: #1a73e8; }
+.stat-lbl { font-size: 0.72rem; color: #70757a; margin-top: 2px; }
+
+/* Section */
+.section { padding: 16px; border-bottom: 1px solid #f1f3f4; }
+.section-title {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #70757a;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* Junction cards */
+.junction-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+.junction-card:hover { background: #f1f3f4; }
+.junction-card.active { background: #e8f0fe; }
+
+.signal-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.signal-icon.red { background: #fce8e6; }
+.signal-icon.green { background: #e6f4ea; }
+.signal-icon.amber { background: #fef7e0; }
+
+.j-info { flex: 1; }
+.j-name { font-size: 0.88rem; font-weight: 500; color: #202124; }
+.j-meta { font-size: 0.75rem; color: #70757a; margin-top: 2px; }
+
+.signal-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.badge-red { background: #fce8e6; color: #d93025; }
+.badge-green { background: #e6f4ea; color: #137333; }
+.badge-amber { background: #fef7e0; color: #b06000; }
+
+/* Emergency panel */
+.emergency-panel { padding: 16px; border-bottom: 1px solid #f1f3f4; }
+.vehicle-btns { display: flex; gap: 8px; margin-bottom: 12px; }
+.v-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 1.5px solid #dadce0;
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #3c4043;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  font-family: 'Roboto', sans-serif;
+}
+.v-btn:hover { border-color: #d93025; color: #d93025; background: #fce8e6; }
+.v-btn.sel { border-color: #d93025; color: #d93025; background: #fce8e6; }
+.v-btn .vi { font-size: 1.1rem; display: block; margin-bottom: 2px; }
+
+.em-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: #d93025;
+  color: white;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+.em-btn:hover { background: #b31412; box-shadow: 0 4px 12px rgba(217,48,37,0.4); }
+.em-btn.off { background: white; color: #d93025; border: 1.5px solid #d93025; }
+
+/* Incident form */
+.form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid #dadce0;
+  background: white;
+  color: #3c4043;
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.85rem;
+  outline: none;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.form-select:focus { border-color: #1a73e8; }
+.report-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1.5px solid #1a73e8;
+  background: white;
+  color: #1a73e8;
+  font-family: 'Google Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.report-btn:hover { background: #e8f0fe; }
+
+/* Forecast */
+.forecast-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.forecast-scroll::-webkit-scrollbar { height: 3px; }
+.forecast-scroll::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 2px; }
+.fc-item {
+  flex-shrink: 0;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: center;
+  min-width: 72px;
+  border: 1.5px solid transparent;
+  transition: all 0.2s;
+}
+.fc-item:hover { border-color: #dadce0; }
+.fc-hour { font-size: 0.7rem; color: #70757a; margin-bottom: 6px; font-weight: 500; }
+.fc-dot { width: 10px; height: 10px; border-radius: 50%; margin: 0 auto 6px; }
+.fc-lbl { font-size: 0.7rem; font-weight: 700; }
+
+/* Right side floating cards */
+.right-float {
+  position: fixed;
+  right: 16px;
+  top: 80px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+}
+
+.float-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.2);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.float-card:hover { box-shadow: 0 4px 30px rgba(0,0,0,0.25); }
+
+.fc-header {
+  padding: 12px 16px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fc-title { font-family: 'Google Sans', sans-serif; font-size: 0.82rem; font-weight: 700; color: #202124; }
+.fc-badge { font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; background: #e8f0fe; color: #1a73e8; font-weight: 500; }
+.fc-body { padding: 0 16px 12px; }
+
+/* Live feed */
+.feed-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+.feed-list::-webkit-scrollbar { width: 3px; }
+.feed-list::-webkit-scrollbar-thumb { background: #dadce0; }
+.feed-entry {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.75rem;
+  color: #3c4043;
+  padding: 4px 0;
+  border-bottom: 1px solid #f1f3f4;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+.feed-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.feed-time { color: #70757a; font-size: 0.68rem; flex-shrink: 0; }
+
+/* Route card */
+.route-row { display: flex; gap: 8px; }
+.route-item { flex: 1; padding: 8px; border-radius: 10px; }
+.route-item.bad { background: #fce8e6; }
+.route-item.good { background: #e6f4ea; }
+.route-tag { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.route-tag.bad { color: #d93025; }
+.route-tag.good { color: #137333; }
+.route-name { font-size: 0.78rem; font-weight: 500; color: #202124; margin-bottom: 3px; }
+.route-meta { font-size: 0.7rem; color: #70757a; }
+
+/* Sidebar toggle btn */
+.menu-btn {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  z-index: 200;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: all 0.2s;
+}
+.menu-btn:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+
+/* Bottom mini bar */
+.bottom-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: white;
+  border-radius: 20px;
+  padding: 8px 20px;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: #3c4043;
+}
+
+.bb-item { display: flex; align-items: center; gap: 6px; }
+.bb-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #202124;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  z-index: 9999;
+  opacity: 0;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Popup custom */
+.leaflet-popup-content-wrapper {
+  border-radius: 16px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip-container { display: none; }
+.popup-box { padding: 14px 16px; min-width: 180px; }
+.popup-name { font-family: 'Google Sans', sans-serif; font-size: 0.9rem; font-weight: 700; color: #202124; margin-bottom: 8px; }
+.popup-row { font-size: 0.78rem; color: #3c4043; margin-bottom: 4px; display: flex; justify-content: space-between; }
+.popup-row b { color: #202124; }
+.popup-footer { background: #f8f9fa; padding: 8px 16px; font-size: 0.72rem; color: #1a73e8; cursor: pointer; font-weight: 500; }
+.popup-footer:hover { background: #e8f0fe; }
+</style>
+</head>
+<body>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Menu button -->
+<button class="menu-btn" onclick="toggleSidebar()" id="menuBtn">☰</button>
+
+<!-- Top bar -->
+<div class="top-bar">
+  <div class="search-box">
+    <span class="search-logo">SmartTraffic</span>
+    <div class="search-divider"></div>
+    <span class="search-text">Coimbatore Traffic Control</span>
+    <span class="search-icon">🔍</span>
+  </div>
+  <div class="top-chips">
+    <button class="chip active" onclick="filterJunctions('all')">All Junctions</button>
+    <button class="chip" onclick="filterJunctions('red')" id="chipRed">🔴 Red</button>
+    <button class="chip" onclick="filterJunctions('green')" id="chipGreen">🟢 Green</button>
+    <button class="chip emergency" id="chipEmergency" onclick="toggleEmergencyQuick()">🚨 Emergency</button>
+  </div>
+</div>
+
+<!-- Left Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">🚦 Traffic Control Panel</div>
+    <div class="sidebar-sub" id="lastUpdate">Connecting to live feed...</div>
+  </div>
+
+  <div class="sidebar-body">
+
+    <!-- Stats -->
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-val blue" id="totalVehicles">--</div>
+        <div class="stat-lbl">Total Vehicles</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val amber" id="avgWait">--</div>
+        <div class="stat-lbl">Avg Wait (sec)</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val red" id="redSignals">--</div>
+        <div class="stat-lbl">Red Signals</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="totalIncidents">0</div>
+        <div class="stat-lbl">Incidents</div>
+      </div>
+    </div>
+
+    <!-- Junctions -->
+    <div class="section">
+      <div class="section-title">Live Junctions</div>
+      <div id="junctionList"></div>
+    </div>
+
+    <!-- Emergency -->
+    <div class="emergency-panel">
+      <div class="section-title">Emergency Control</div>
+      <div class="vehicle-btns">
+        <button class="v-btn sel" onclick="selectV(this,'Ambulance')"><span class="vi">🚑</span>Ambulance</button>
+        <button class="v-btn" onclick="selectV(this,'Fire Truck')"><span class="vi">🚒</span>Fire</button>
+        <button class="v-btn" onclick="selectV(this,'Police')"><span class="vi">🚓</span>Police</button>
+      </div>
+      <button class="em-btn" id="emBtn" onclick="activateEmergency()">⚡ Activate Emergency Corridor</button>
+      <button class="em-btn off" id="deactivateBtn" style="display:none" onclick="deactivateEmergency()">Deactivate</button>
+    </div>
+
+    <!-- Incident -->
+    <div class="section">
+      <div class="section-title">Report Incident</div>
+      <select class="form-select" id="incidentType">
+        <option value="">Select Incident Type</option>
+        <option>Accident</option>
+        <option>Road Block</option>
+        <option>Flooding</option>
+        <option>Construction</option>
+        <option>Breakdown</option>
+      </select>
+      <select class="form-select" id="incidentLocation">
+        <option value="">Select Location</option>
+        <option>Junction A – Main Street</option>
+        <option>Junction B – Park Road</option>
+        <option>Junction C – Market Square</option>
+        <option>Junction D – College Road</option>
+      </select>
+      <button class="report-btn" onclick="reportIncident()">Submit Report</button>
+    </div>
+
+    <!-- Forecast -->
+    <div class="section">
+      <div class="section-title">AI Traffic Forecast</div>
+      <div class="forecast-scroll" id="forecastRow"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Right floating cards -->
+<div class="right-float">
+
+  <!-- Route -->
+  <div class="float-card">
+    <div class="fc-header">
+      <div class="fc-title">🗺 Route Suggestion</div>
+      <div class="fc-badge" id="timeSaved">Save 7 min</div>
+    </div>
+    <div class="fc-body">
+      <div class="route-row" id="routeRow">
+        <div class="route-item bad">
+          <div class="route-tag bad">Current</div>
+          <div class="route-name">Loading...</div>
+        </div>
+        <div class="route-item good">
+          <div class="route-tag good">Suggested</div>
+          <div class="route-name">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Feed -->
+  <div class="float-card">
+    <div class="fc-header">
+      <div class="fc-title">📡 Live Feed</div>
+      <div class="fc-badge" id="feedBadge">0 events</div>
+    </div>
+    <div class="fc-body">
+      <div class="feed-list" id="liveFeed"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom legend -->
+<div class="bottom-bar">
+  <div class="bb-item"><div class="bb-dot" style="background:#d93025"></div> Red Signal</div>
+  <div class="bb-dot" style="background:#dadce0;width:1px;height:14px;border-radius:0"></div>
+  <div class="bb-item"><div class="bb-dot" style="background:#f9ab00"></div> Amber</div>
+  <div class="bb-dot" style="background:#dadce0;width:1px;height:14px;border-radius:0"></div>
+  <div class="bb-item"><div class="bb-dot" style="background:#137333"></div> Green Signal</div>
+  <div class="bb-dot" style="background:#dadce0;width:1px;height:14px;border-radius:0"></div>
+  <div class="bb-item" id="wsStatus">🔴 Connecting...</div>
+  <div class="bb-dot" style="background:#dadce0;width:1px;height:14px;border-radius:0"></div>
+  <div id="clock" style="font-weight:500;color:#1a73e8">--:--</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let selectedVehicle = 'Ambulance';
+let feedCount = 0;
+let map, markers = {}, sidebarOpen = false, ws;
+let emergencyActive = false;
+
+const junctionCoords = {
+  1: { lat: 11.0168, lng: 76.9558 },
+  2: { lat: 11.0200, lng: 76.9600 },
+  3: { lat: 11.0150, lng: 76.9500 },
+  4: { lat: 11.0180, lng: 76.9650 },
+};
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+}, 1000);
+
+// Toast
+function toast(msg, color='#202124') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Feed
+function addFeed(msg, color='#1a73e8') {
+  const feed = document.getElementById('liveFeed');
+  const now = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const el = document.createElement('div');
+  el.className = 'feed-entry';
+  el.innerHTML = `<div class="feed-dot" style="background:${color}"></div><div style="flex:1">${msg}</div><div class="feed-time">${now}</div>`;
+  feed.insertBefore(el, feed.firstChild);
+  if (feed.children.length > 15) feed.removeChild(feed.lastChild);
+  feedCount++;
+  document.getElementById('feedBadge').textContent = `${feedCount} events`;
+}
+
+// Sidebar
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('open', sidebarOpen);
+  document.getElementById('menuBtn').textContent = sidebarOpen ? '✕' : '☰';
+}
+
+// Map init
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([11.0168, 76.9575], 15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+  }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+}
+
+// Marker icon
+function makeIcon(status, vehicles) {
+  const cfg = {
+    red:   { bg: '#d93025', fg: 'white', emoji: '🔴' },
+    green: { bg: '#137333', fg: 'white', emoji: '🟢' },
+    amber: { bg: '#f9ab00', fg: 'white', emoji: '🟡' },
+  };
+  const c = cfg[status] || cfg.red;
+  return L.divIcon({
+    className: '',
+    html: `
+      <div style="
+        background:${c.bg};
+        color:${c.fg};
+        border-radius:50%;
+        width:36px;height:36px;
+        display:flex;align-items:center;justify-content:center;
+        font-size:0.75rem;font-weight:700;
+        border:3px solid white;
+        box-shadow:0 3px 12px rgba(0,0,0,0.3),0 0 0 4px ${c.bg}44;
+        font-family:'Roboto',sans-serif;
+        cursor:pointer;
+      ">${vehicles}</div>`,
+    iconSize: [36,36],
+    iconAnchor: [18,18],
+    popupAnchor: [0,-20]
+  });
+}
+
+// Update markers
+function updateMarkers(junctions) {
+  junctions.forEach(j => {
+    const coord = junctionCoords[j.id];
+    if (!coord) return;
+    if (markers[j.id]) map.removeLayer(markers[j.id]);
+    const m = L.marker([coord.lat, coord.lng], { icon: makeIcon(j.status, j.vehicles) })
+      .addTo(map)
+      .bindPopup(`
+        <div class="popup-box">
+          <div class="popup-name">🚦 ${j.name}</div>
+          <div class="popup-row"><span>Status</span><b style="color:${j.status==='red'?'#d93025':j.status==='green'?'#137333':'#f9ab00'};text-transform:uppercase">${j.status}</b></div>
+          <div class="popup-row"><span>Vehicles</span><b>${j.vehicles}</b></div>
+          <div class="popup-row"><span>Wait Time</span><b>${j.wait_time}s</b></div>
+        </div>
+        <div class="popup-footer" onclick="getAI(${j.id})">🤖 Get AI Prediction →</div>
+      `, {closeButton: false});
+    m.on('click', () => highlightJunction(j.id));
+    markers[j.id] = m;
+  });
+}
+
+// Render junction list
+function renderJunctions(junctions) {
+  const icons = { red:'🔴', green:'🟢', amber:'🟡' };
+  document.getElementById('junctionList').innerHTML = junctions.map(j => `
+    <div class="junction-card" onclick="focusJunction(${j.id})" id="jcard-${j.id}">
+      <div class="signal-icon ${j.status}">${icons[j.status]||'⚪'}</div>
+      <div class="j-info">
+        <div class="j-name">${j.name}</div>
+        <div class="j-meta">🚗 ${j.vehicles} vehicles · ⏱ ${j.wait_time}s wait</div>
+      </div>
+      <div class="signal-badge badge-${j.status}">${j.status.toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+function highlightJunction(id) {
+  document.querySelectorAll('.junction-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById(`jcard-${id}`);
+  if (card) card.classList.add('active');
+}
+
+function focusJunction(id) {
+  const coord = junctionCoords[id];
+  if (coord) {
+    map.flyTo([coord.lat, coord.lng], 17, {duration:1});
+    if (markers[id]) markers[id].openPopup();
+    highlightJunction(id);
+  }
+}
+
+async function getAI(id) {
+  try {
+    const res = await fetch(`${API}/ai/predict/${id}`);
+    const d = await res.json();
+    if (d.congestion_label) {
+      toast(`Junction ${id}: ${d.congestion_label} congestion | ${d.predicted_wait_seconds}s wait | ${d.confidence}% confidence`);
+      addFeed(`🤖 Junction ${id}: ${d.congestion_label} (${d.confidence}% conf)`, '#1a73e8');
+    }
+  } catch(e) {}
+}
+
+function filterJunctions(type) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+}
+
+// Forecast
+async function fetchForecast() {
+  try {
+    const res = await fetch(`${API}/ai/forecast`);
+    const d = await res.json();
+    const colors = { High:'#d93025', Medium:'#f9ab00', Low:'#137333' };
+    document.getElementById('forecastRow').innerHTML = d.forecast.map(f => `
+      <div class="fc-item">
+        <div class="fc-hour">${f.hour}</div>
+        <div class="fc-dot" style="background:${colors[f.congestion_label]}"></div>
+        <div class="fc-lbl" style="color:${colors[f.congestion_label]}">${f.congestion_label}</div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+// Route
+async function fetchRoute() {
+  try {
+    const res = await fetch(`${API}/route/suggest`);
+    const d = await res.json();
+    document.getElementById('timeSaved').textContent = `Save ${d.time_saved_minutes} min`;
+    document.getElementById('routeRow').innerHTML = `
+      <div class="route-item bad">
+        <div class="route-tag bad">⚠ Current</div>
+        <div class="route-name">${d.current_route.name}</div>
+        <div class="route-meta">${d.current_route.time_minutes} min · ${d.current_route.distance_km} km</div>
+      </div>
+      <div class="route-item good">
+        <div class="route-tag good">✓ Suggested</div>
+        <div class="route-name">${d.suggested_route.name}</div>
+        <div class="route-meta">${d.suggested_route.time_minutes} min · save ${d.time_saved_minutes} min</div>
+      </div>
+    `;
+  } catch(e) {}
+}
+
+// Summary
+async function fetchSummary() {
+  try {
+    const res = await fetch(`${API}/traffic/summary`);
+    const d = await res.json();
+    document.getElementById('totalVehicles').textContent = d.total_vehicles;
+    document.getElementById('avgWait').textContent = d.avg_wait_time;
+    document.getElementById('redSignals').textContent = d.red_signals;
+    document.getElementById('totalIncidents').textContent = d.incidents;
+    document.getElementById('lastUpdate').textContent = `Last updated: ${new Date().toLocaleTimeString('en-IN')}`;
+  } catch(e) {}
+}
+
+// Vehicle select
+function selectV(el, type) {
+  document.querySelectorAll('.v-btn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedVehicle = type;
+}
+
+// Emergency
+function toggleEmergencyQuick() {
+  if (emergencyActive) deactivateEmergency();
+  else activateEmergency();
+}
+
+async function activateEmergency() {
+  try {
+    await fetch(`${API}/emergency/activate`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({vehicle_type: selectedVehicle})
+    });
+    emergencyActive = true;
+    document.getElementById('emBtn').textContent = `🚨 ${selectedVehicle} Corridor Active`;
+    document.getElementById('deactivateBtn').style.display = 'block';
+    document.getElementById('chipEmergency').classList.add('on');
+    document.getElementById('chipEmergency').textContent = '🚨 ACTIVE';
+    toast(`🚨 Emergency corridor activated for ${selectedVehicle}!`, '#d93025');
+    addFeed(`🚨 Emergency: ${selectedVehicle} corridor activated`, '#d93025');
+    fetchJunctions();
+  } catch(e) {}
+}
+
+async function deactivateEmergency() {
+  try {
+    await fetch(`${API}/emergency/deactivate`, {method:'POST'});
+    emergencyActive = false;
+    document.getElementById('emBtn').textContent = '⚡ Activate Emergency Corridor';
+    document.getElementById('deactivateBtn').style.display = 'none';
+    document.getElementById('chipEmergency').classList.remove('on');
+    document.getElementById('chipEmergency').textContent = '🚨 Emergency';
+    toast('Emergency deactivated. Signals returning to normal.', '#137333');
+    addFeed('✓ Emergency deactivated — signals normal', '#137333');
+    fetchJunctions();
+  } catch(e) {}
+}
+
+// Incident
+async function reportIncident() {
+  const type = document.getElementById('incidentType').value;
+  const location = document.getElementById('incidentLocation').value;
+  if (!type || !location) { toast('Please select type and location', '#d93025'); return; }
+  try {
+    await fetch(`${API}/incidents/report`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type, location})
+    });
+    toast(`Incident reported at ${location}`, '#137333');
+    addFeed(`⚠ Incident: ${type} at ${location}`, '#f9ab00');
+    fetchSummary();
+  } catch(e) {}
+}
+
+async function fetchJunctions() {
+  try {
+    const res = await fetch(`${API}/junctions`);
+    const d = await res.json();
+    renderJunctions(d.junctions);
+    updateMarkers(d.junctions);
+  } catch(e) {}
+}
+
+// WebSocket
+function connectWS() {
+  ws = new WebSocket('ws://localhost:8000/ws/live');
+  ws.onopen = () => {
+    document.getElementById('wsStatus').textContent = '🟢 Live';
+    addFeed('Connected to live traffic feed', '#137333');
+  };
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'junction_update') {
+      renderJunctions(d.junctions);
+      updateMarkers(d.junctions);
+      const total = d.junctions.reduce((s,j)=>s+j.vehicles,0);
+      const avg = Math.round(d.junctions.reduce((s,j)=>s+j.wait_time,0)/d.junctions.length);
+      document.getElementById('totalVehicles').textContent = total;
+      document.getElementById('avgWait').textContent = avg;
+      document.getElementById('redSignals').textContent = d.junctions.filter(j=>j.status==='red').length;
+    }
+  };
+  ws.onclose = () => {
+    document.getElementById('wsStatus').textContent = '🔴 Reconnecting...';
+    setTimeout(connectWS, 3000);
+  };
+}
+
+// Init
+async function init() {
+  initMap();
+  await fetchSummary();
+  await fetchJunctions();
+  await fetchForecast();
+  await fetchRoute();
+  connectWS();
+  setInterval(fetchSummary, 10000);
+  setInterval(fetchForecast, 30000);
+  // Auto open sidebar
+  setTimeout(() => toggleSidebar(), 500);
+}
+
+init();
+</script>
+</body>
+</html>
